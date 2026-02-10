@@ -3,16 +3,25 @@
 
 #include <LovyanGFX.hpp> // Include LovyanGFX library
 
-#define EXT_SPI_SCLK 10
-#define EXT_SPI_MOSI 11
+//#define EXT_SPI_SCLK 10
+//#define EXT_SPI_MOSI 11
+//#define EXT_SPI_MISO 12
+//#define EXT_SPI_CS 13
+//#define EXT_SPI_DC 14
+//#define EXT_SPI_RST 15
+
+//MachiKania-P board
+#define EXT_SPI_SCLK 14
+#define EXT_SPI_MOSI 15
 #define EXT_SPI_MISO 12
 #define EXT_SPI_CS 13
-#define EXT_SPI_DC 14
-#define EXT_SPI_RST 15
+#define EXT_SPI_DC 10
+#define EXT_SPI_RST 11
 
 class LGFX : public lgfx::LGFX_Device
 {
-    lgfx::Panel_ILI9488 _panel_instance; // ILI9488 panel
+//    lgfx::Panel_ILI9488 _panel_instance; // ILI9488 panel
+    lgfx::Panel_ILI9341 _panel_instance; // IL9341 panel
     lgfx::Bus_SPI _bus_instance; // SPI bus instance
   public:
     LGFX(void)
@@ -21,8 +30,10 @@ class LGFX : public lgfx::LGFX_Device
         auto cfg = _bus_instance.config();
         cfg.spi_host = 1; // SPI1 for pico/pico2
         cfg.spi_mode = 0; // SPI mode 0
-        cfg.freq_write = 50000000; // SPI write frequency
-        cfg.freq_read = 25000000; // SPI read frequency
+        //cfg.freq_write = 50000000; // SPI write frequency
+        //cfg.freq_read = 25000000; // SPI read frequency
+        cfg.freq_write = 40000000; // 送信時のSPIクロック (最大80MHz, 80MHzを整数で割った値に丸められます)
+        cfg.freq_read = 20000000;  // 受信時のSPIクロック
 
         cfg.pin_sclk = EXT_SPI_SCLK; // SCLK pin
         cfg.pin_mosi = EXT_SPI_MOSI; // MOSI pin
@@ -39,21 +50,28 @@ class LGFX : public lgfx::LGFX_Device
         cfg.pin_rst = EXT_SPI_RST; // RST pin
         cfg.pin_busy = -1; // No busy pin
 
-        cfg.memory_width = 320; // Screen width
-        cfg.memory_height = 480; // Screen height
-        cfg.panel_width = 320; // Panel width
+        //cfg.memory_width = 320; // Screen width
+        //cfg.memory_height = 480; // Screen height
+        cfg.memory_width = 240; // Screen width
+        cfg.memory_height = 320; // Screen height
+        //cfg.panel_width = 320; // Panel width
+        //cfg.panel_height = 320; // Panel height
+        cfg.panel_width = 240; // Panel width
         cfg.panel_height = 320; // Panel height
 
+        cfg.offset_x = 0 ; // X offset
+        //cfg.offset_x = 80; // X offset
         cfg.offset_x = 0; // X offset
-        cfg.offset_y = 0; // Y offset
-        cfg.offset_rotation = 6; // Rotation offset
+        cfg.offset_y = 0 ; // Y offset
+        cfg.offset_rotation = 1; // Rotation offset
 
         cfg.dummy_read_pixel = 8; // Dummy read pixel
         cfg.dummy_read_bits = 1; // Dummy read bits
 
         cfg.readable = true; // Enable readable mode
 
-        cfg.invert = true; // inversion
+        //cfg.invert = true; // inversion
+        cfg.invert = false; // inversion
         cfg.rgb_order = false; // RGB order
 
         // cfg.bus_shared = true; // Bus shared

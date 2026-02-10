@@ -47,7 +47,9 @@ int fgColor = 0;
 int bgColor = 0;
 int fgColorIndex = 0;
 int bgColorIndex = 0;
-int MZ700_COLOR[] = {TFT_BLACK, TFT_BLUE, TFT_RED, TFT_MAGENTA, TFT_GREEN, TFT_CYAN, TFT_YELLOW, TFT_WHITE};
+//int MZ700_COLOR[] = {TFT_BLACK, TFT_BLUE, TFT_RED, TFT_MAGENTA, TFT_GREEN, TFT_CYAN, TFT_YELLOW, TFT_WHITE};
+UINT8 byteVramPrevBuf[0x1000];  //(tonasuzuki)直前の画面を一時保存するバッファ
+bool bPrevBuf;
 
 int lcdMode = 0;
 //int lcdRotate = 0; move to m5z700AtomHDMI.ino
@@ -67,9 +69,26 @@ int mz_screen_init(void)
   needScreenUpdateFlag = false;
   screnUpdateValidFlag = false;
 
-  canvas.setColorDepth(8);
+  //https://github.com/lovyan03/LovyanGFX
+//  canvas.setColorDepth(8);  
+  canvas.setColorDepth(4);     // 4ビット(16色)パレットモードに設定
   canvas.setTextSize(1);
-  canvas.createSprite(320,40); //メモリ足りないので縦40ドット（=5行）に分割して5回に分けて描画する。
+//  canvas.createSprite(320,40); //メモリ足りないので縦40ドット（=5行）に分割して5回に分けて描画する。
+  //メモリの多いrpipico2を使い、一度に描画する。
+  canvas.createSprite(320,200);
+  // パレットの色を設定するには setPaletteColor を使用します。
+  //                        0xRRGGBBU);
+  canvas.setPaletteColor(0, 0x000000U);
+  canvas.setPaletteColor(1, 0x0000FFU);
+  canvas.setPaletteColor(2, 0xFF0000U);
+  canvas.setPaletteColor(3, 0xFF00FFU);
+  canvas.setPaletteColor(4, 0x00FF00U);
+  canvas.setPaletteColor(5, 0x00FFFFU);
+  canvas.setPaletteColor(6, 0xFFFF00U);
+  canvas.setPaletteColor(7, 0xFFFFFFU);
+  //
+  bPrevBuf=false;
+
 
   statusAreaMessage = "";
 
@@ -93,7 +112,7 @@ void set_scren_update_valid_flag(boolean flag){
 int font_load(const char *fontfile)
 {
   #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5CARDPUTER)
-    Serial2.println("USE INTERNAL FONT DATA");
+    Serial1.println("USE INTERNAL FONT DATA");
     return 0;
   #endif
   FILE *fdfont;
@@ -105,8 +124,7 @@ int font_load(const char *fontfile)
   String fontFile = DEFAULT_FONT_FILE;
   File dataFile = SD.open(romDir + "/" + fontFile, FILE_READ);
   if (!dataFile) {
-    m5lcd.println("FONT FILE NOT FOUND!");
-    Serial2.println("FONT FILE NOT FOUND");
+    Serial1.println("FONT FILE NOT FOUND");
     perror("Open font file");
     return -1;
   }
@@ -126,7 +144,7 @@ int font_load(const char *fontfile)
     }
     delay(10);
   }
-  Serial2.println("END READ ROM");
+  Serial1.println("END READ ROM");
 
   dataFile.close();
   return 0;
@@ -162,8 +180,10 @@ void update_scrn_thread(){
       bgColorIndex = 0;
       int drawIndex = 0;
       m5lcd.startWrite();
-      for (int cy = 0; cy < 25; cy++) {
-        for (int cx = 0; cx < 40; cx++) {
+      for (int cy = 0; cy < 25; cy++) 
+      {
+        for (int cx = 0; cx < 40; cx++) 
+        {
           ch = mem[VID_START + cx + cy * 40];
           if (mzConfig.mzMode == MZMODE_700) {
             chAttr = mem[VID_START + cx + cy * 40 + 0x800];
@@ -175,42 +195,66 @@ void update_scrn_thread(){
             //Color
             fgColorIndex = ((chAttr >> 4) & 0x07) ;
             bgColorIndex = (chAttr & 0x07);
-
+            /*
             if (fgColorIndex <= 7) {
               fgColor = MZ700_COLOR[fgColorIndex];
             } else {
               fgColor = MZ700_COLOR[7];
-              Serial2.print("fgColorIndexError:");
-              Serial2.print(fgColorIndex);
+              Serial1.print("fgColorIndexError:");
+              Serial1.print(fgColorIndex);
             }
             if (bgColorIndex <= 7) {
               bgColor = MZ700_COLOR[bgColorIndex];
             } else {
               fgColor = MZ700_COLOR[0];
-              Serial2.print("bgColorIndexError:");
-              Serial2.print(bgColorIndex);
+              Serial1.print("bgColorIndexError:");
+              Serial1.print(bgColorIndex);
             }
+            */
           } else {
-            fgColor = c_bright;
-            bgColor = c_dark;
+            //fgColor = c_bright;
+            //bgColor = c_dark;
+            fgColorIndex = c_bright;
+            fgColorIndex = c_dark;
           }
-            canvas.fillRect(cx * 8, (cy * 8) % 40, 8, 8, bgColor);
-          if (hw700.pcg700_mode == 0 || !(ch & 0x80)) {
-              fontPtr = &mz_font[(ch + fontOffset) * 8];
-          } else {
-            if ((chAttr & 0x80) != 0x80) {
-              fontPtr = &pcg700_font[(ch & 0x7F) * 8];
+          //(20250928 tonasuzuki) 画面が更新された部分のみ描画する。
+          if ((! bPrevBuf) || 
+              (ch!=byteVramPrevBuf[cx + cy * 40]) ||
+              (chAttr!=byteVramPrevBuf[cx + cy * 40 + 0x800]))
+          {
+            //canvas.fillRect(cx * 8, (cy * 8) % 40, 8, 8, bgColor);
+            //canvas.fillRect(cx * 8, (cy * 8) % 40, 8, 8, bgColorIndex);
+            canvas.fillRect((cx * 8), (cy * 8), 8, 8, bgColorIndex);
+            
+            if (hw700.pcg700_mode == 0 || !(ch & 0x80)) {
+                fontPtr = &mz_font[(ch + fontOffset) * 8];
             } else {
-              fontPtr = &pcg700_font[(ch) * 8];
+              if ((chAttr & 0x80) != 0x80) {
+                fontPtr = &pcg700_font[(ch & 0x7F) * 8];
+              } else {
+                fontPtr = &pcg700_font[(ch) * 8];
+              }
             }
+            //(20250928 tonasuzuki)
+            //canvas.drawBitmap(cx * 8, (cy * 8) %40 , fontPtr, 8, 8, fgColor);
+            canvas.drawBitmap((cx * 8), (cy * 8) , fontPtr, 8, 8, fgColorIndex);
+            //画面を更新した部分をバッファに記録しておく
+            byteVramPrevBuf[cx + cy * 40]=ch;
+            byteVramPrevBuf[cx + cy * 40 + 0x800]=chAttr;
           }
-          canvas.drawBitmap(cx * 8, (cy * 8) %40 , fontPtr, 8, 8, fgColor);
         }
-          if((cy+1)%5 == 0){
+        /*
+        if((cy+1)%5 == 0)
+        {
           canvas.pushSprite(0, 40 * drawIndex + 10); 
           drawIndex = drawIndex + 1;
-          }
+        }
+        */
       }
+      bPrevBuf=true;
+      //スプライトに描画した画面をLCDに転送する
+      canvas.pushSprite(0, 10); 
+      //
       if(statusAreaMessage.equals("")==false){
           m5lcd.setTextColor(TFT_WHITE);
           m5lcd.setTextSize(1);
@@ -218,11 +262,13 @@ void update_scrn_thread(){
           m5lcd.setCursor(0, 220);
           m5lcd.print(statusAreaMessage);
       }else{
-          m5lcd.fillRect(0, 220, 320, 10, TFT_BLACK);
+//          m5lcd.fillRect(0, 220, 320, 10, TFT_BLACK);
+//          m5lcd.fillRect(0, 220, 320, 10, 0);
       }
       m5lcd.endWrite();
     }
-    delay(10);
+    //delay(10);
+    delay(2);
 }
 
 void updateStatusArea(const char* message) {

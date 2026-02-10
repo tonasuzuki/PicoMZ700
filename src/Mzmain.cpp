@@ -204,6 +204,25 @@ unsigned char ak_tbl_s_700[] =
   0x93,
 };
 
+//--------------------------------------------------------------
+// 20250921 PUTITE-ROPOKO用 GPIO-BUTTON 
+//--------------------------------------------------------------
+#define GPIO_BUTTON_NUM 7
+uint unGpioButton[GPIO_BUTTON_NUM][3] =
+  {
+  // GPIO,MZ-700 keycode,0
+    {GPIO_BUTTON_FIRE  ,0x64,0},  //[SPACE] 
+    {GPIO_BUTTON_LEFT  ,0x72,0},
+    {GPIO_BUTTON_RIGHT ,0x73,0},
+    {GPIO_BUTTON_DOWN  ,0x74,0},
+    {GPIO_BUTTON_UP    ,0x75,0},
+    {GPIO_BUTTON_START ,0x95,0},  //[F3]
+    {GPIO_BUTTON_SELECT,0x94,0}   //[F4]
+  };
+
+
+
+
 unsigned char *ak_tbl;
 unsigned char *ak_tbl_s;
 
@@ -336,14 +355,14 @@ void mz_free_mem(void)
 void monrom_load(void)
 {
   String ROM_FILES[4] = {"1Z009.ROM", "NEWMON7.ROM", "SP-1002.ROM","NEWMON.ROM"};
-  Serial2.println("mzConfig.romFile");
-  Serial2.println(mzConfig.romFile);
+  Serial1.println("mzConfig.romFile");
+  Serial1.println(mzConfig.romFile);
   String romFile = mzConfig.romFile;
   if (romFile.length() == 0) {
     romFile = DEFAULT_ROM_FILE;
   }
   String romPath = String(ROM_DIRECTORY) + "/" + romFile;
-  Serial2.println("ROM PATH:" + romPath);
+  Serial1.println("ROM PATH:" + romPath);
 
   if (SD.exists(romPath) == false) 
   {
@@ -379,15 +398,15 @@ void monrom_load(void)
     m5lcd.print("USE ROM FILE[");
     m5lcd.print(romPath);
     m5lcd.println("]");
-    Serial2.println(":END READ ROM:" + romPath);
+    Serial1.println(":END READ ROM:" + romPath);
   } else {
     m5lcd.print("ROM FILE FAIL:");
     m5lcd.println(romPath);
-    Serial2.println("FAIL END READ ROM:" + romPath);
+    Serial1.println("FAIL END READ ROM:" + romPath);
   }
   mzConfig.mzMode = set_mztype();
-  Serial2.print("MZ TYPE=");
-  Serial2.println(mzConfig.mzMode);
+  Serial1.print("MZ TYPE=");
+  Serial1.println(mzConfig.mzMode);
 
   if (mzConfig.mzMode == MZMODE_80) {
     ak_tbl = ak_tbl_80c;
@@ -449,13 +468,30 @@ void mz_exit(int arg)
 }
 
 //--------------------------------------------------------------
+// キーボード入力チェック
+//--------------------------------------------------------------
+void InitGPIOButton() 
+{
+  uint unPortNum;
+  for (int nButtonNum=0;nButtonNum<GPIO_BUTTON_NUM;nButtonNum++)
+  {
+    unPortNum=unGpioButton[nButtonNum][0];
+    gpio_init   (unPortNum);
+    gpio_set_dir(unPortNum, GPIO_IN);
+    gpio_pull_up(unPortNum);
+  }
+}
+
+
+
+//--------------------------------------------------------------
 // メイン部
 //--------------------------------------------------------------
 int mz80c_main()
 {
   delay(500);
 
-  Serial2.println("M5Z-700 START");
+  Serial1.println("M5Z-700 START");
   m5lcd.println("M5Z-700 START");
  
   _keyboard = new PicoCalcKeyBoard;
@@ -470,7 +506,11 @@ int mz80c_main()
   serialKeyCode = 0;
 
   sendBreakFlag = false;
-    
+  
+  //{ INIT MachiKaniaP GPIO button (20250921)
+  InitGPIOButton();
+  //}
+
   //pinMode(buttonApin, INPUT_PULLUP);
   //pinMode(buttonBpin, INPUT_PULLUP);
   joyPadPushed_U = false;
@@ -489,18 +529,21 @@ int mz80c_main()
   firstLoadFlag = true;
   
   wonderHouseMode = false;
+  
+  //Default: enableSound  (20250915:tonasuzuki)
+  mzConfig.enableSound=true;
 
-  Serial2.println("Screen init:Start");
+  Serial1.println("Screen init:Start");
   mz_screen_init();
-  Serial2.println("Screen init:OK");
+  Serial1.println("Screen init:OK");
   mz_alloc_mem();
-  Serial2.println("Alloc mem:OK");
+  Serial1.println("Alloc mem:OK");
 
   makePWM();
-  Serial2.println("MakePWM:OK");
+  Serial1.println("MakePWM:OK");
   // ＭＺのモニタのセットアップ
   mz_mon_setup();
-  Serial2.println("Monitor:OK");
+  Serial1.println("Monitor:OK");
   // メインループ実行
   mainloop();
 
@@ -526,9 +569,9 @@ void mainloop(void)
   monrom_load();
   font_load("");
   mz_reset();
-  Serial2.println("mz_reset:OK");
+  Serial1.println("mz_reset:OK");
   setup_cpuspeed(1);
-   Serial2.println("setup_cpuspeed:OK");
+   Serial1.println("setup_cpuspeed:OK");
   Z80_IRQ = 0;
   //	Z80_Trap = 0x0556;
 
@@ -536,7 +579,7 @@ void mainloop(void)
 
   updateStatusArea("");
   
-  m5lcd.fillScreen(TFT_BLACK);
+//  m5lcd.fillScreen(TFT_BLACK);
   
   delay(100);
 
@@ -556,20 +599,22 @@ void mainloop(void)
       delay(1);
     }
 
-#if defined(AUTO_LOAD_ROPOKO) || defined( AUTO_LOAD_SP5030) || defined( AUTO_LOAD_SBASIC)
+#if defined(AUTO_LOAD_ROPOKO) || defined( AUTO_LOAD_PETITE) || defined( AUTO_LOAD_SP5030) || defined( AUTO_LOAD_SBASIC)
     if(demoLoadFlag == false && syncTmp - startMills > 1000 * 5){ //起動から5秒後にROPOKOトライアルを読み込み
       set_scren_update_valid_flag(false);
       suspendScrnThreadFlag = true;
       delay(100);
   #ifdef AUTO_LOAD_ROPOKO
       setMztToMemory("ROPOKO-T.mzt"); 
+  #elif defined( AUTO_LOAD_PETITE)    //(20250921)
+      setMztToMemory("PETITE.MZT");   //(20250921)
   #elif defined( AUTO_LOAD_SP5030)
       setMztToMemory("SP-5030.mzt"); 
   #else
       setMztToMemory("S-BASIC.mzt"); 
   #endif
       delay(100);
-      m5lcd.fillScreen(TFT_BLACK);
+//      m5lcd.fillScreen(TFT_BLACK);
       suspendScrnThreadFlag = false;
       set_scren_update_valid_flag(true); 
       demoLoadFlag = true;
@@ -647,9 +692,38 @@ void scrn_draw()
   return;
 }
 
+
 //--------------------------------------------------------------
 // キーボード入力チェック
 //--------------------------------------------------------------
+
+void keyCheck() 
+{
+  uint unPortNum;
+  for (int nButtonNum=0;nButtonNum<GPIO_BUTTON_NUM;nButtonNum++)
+  {
+    unPortNum=unGpioButton[nButtonNum][0];
+    if (unGpioButton[nButtonNum][2]==0)
+    {
+      if (!gpio_get(unPortNum)) 
+      {
+        unGpioButton[nButtonNum][2]=1;
+        mz_keydown_sub(unGpioButton[nButtonNum][1]);
+      }
+    }
+    else
+    {
+      if (gpio_get(unPortNum)) 
+      {
+        unGpioButton[nButtonNum][2]=0;
+        mz_keyup_sub(unGpioButton[nButtonNum][1]);
+      }
+    }
+  }
+}
+
+
+/*
 int delayInputKeyCode = 0;  //SHIFT併用時にkeyDownを少し遅らせる
 void keyCheck() {
   //入力がある場合、5回は入力のまま。
@@ -738,7 +812,7 @@ void keyCheck() {
     if (inKeyCode == 0) {
       return;
     }
-    //Serial2.printf("inkeyCode:%#x:%#x:%#x\n", inKeyCode,ak_tbl[inKeyCode],ak_tbl_s[inKeyCode]);
+    //Serial1.printf("inkeyCode:%#x:%#x:%#x\n", inKeyCode,ak_tbl[inKeyCode],ak_tbl_s[inKeyCode]);
 
     if (ak_tbl[inKeyCode] == 0xff)
     {
@@ -771,18 +845,19 @@ void keyCheck() {
     }
   }
 }
+*/
 
 //--------------------------------------------------------------
 // シリアル入力
 //--------------------------------------------------------------
 int checkSerialKey()
 {
-  if (Serial2.available() > 0) {
-    serialKeyCode = Serial2.read();
+  if (Serial1.available() > 0) {
+    serialKeyCode = Serial1.read();
     if ( serialKeyCode == 27 ) { //ESC
-      serialKeyCode = Serial2.read();
+      serialKeyCode = Serial1.read();
       if (serialKeyCode == 91) {
-        serialKeyCode = Serial2.read();
+        serialKeyCode = Serial1.read();
         switch (serialKeyCode) {
           case 65:
             serialKeyCode = 0x12;  //UP
@@ -810,7 +885,7 @@ int checkSerialKey()
         }
       } else if (serialKeyCode == 255)
       {
-        //Serial2.println("ESC");
+        //Serial1.println("ESC");
         //serialKeyCode = 0x03;  //ESC -> SHIFT + BREAK
         sendBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
         serialKeyCode = 0;
@@ -819,7 +894,7 @@ int checkSerialKey()
     if (serialKeyCode == 127) { //BackSpace
       serialKeyCode = 0x17;
     }
-    while (Serial2.available() > 0 && Serial2.read() != -1);
+    while (Serial1.available() > 0 && Serial1.read() != -1);
   }
   return serialKeyCode;
 }
@@ -834,7 +909,7 @@ void checkJoyPad() {
 //--------------------------------------------------------------
 // PicoCalc Keyboard Logic
 //--------------------------------------------------------------
-
+/*
 int checkPicoCalcKey() {
   
   uint8_t picoCalcKeyCode = 0;
@@ -846,7 +921,7 @@ int checkPicoCalcKey() {
     return 0;
   }
 
-  Serial2.println(picoCalcKeyCode, HEX);
+  Serial1.println(picoCalcKeyCode, HEX);
 
   //特殊キー
   switch (picoCalcKeyCode) {
@@ -897,6 +972,7 @@ int checkPicoCalcKey() {
   }
   return picoCalcKeyCode;
 }
+*/
 
 String selectMzt() {
   //音を鳴らしているなら止める
@@ -933,7 +1009,7 @@ String selectMzt() {
 
       fileList[fileListCount] = fileName;
       fileListCount++;
-      Serial2.println(fileName);
+      Serial1.println(fileName);
     }
     entry.close();
   }
@@ -995,7 +1071,7 @@ String selectMzt() {
     if(_keyboard->fetch_key(picoCalcKeyCode)){
 
       if(picoCalcKeyCode != 0){
-        Serial2.println(picoCalcKeyCode, HEX);
+        Serial1.println(picoCalcKeyCode, HEX);
         switch(picoCalcKeyCode){
           case 0xB5://上
             selectIndex--;
@@ -1064,11 +1140,11 @@ int setMztToMemory(String mztFile) {
   filePath += "/" + mztFile;
   /*
     File fd = SD.open(filePath, FILE_READ);
-    Serial2.println("fileOpen");
+    Serial1.println("fileOpen");
     if(fd == NULL)
     {
-    Serial2.print("can't open:");
-    Serial2.println(filePath);
+    Serial1.print("can't open:");
+    Serial1.println(filePath);
     delay(100);
     fd.close();
     return false;
@@ -1078,7 +1154,7 @@ int setMztToMemory(String mztFile) {
     int size = header[0x12] | (header[0x13] << 8);
     int offs = header[0x14] | (header[0x15] << 8);
     int addr = header[0x16] | (header[0x17] << 8);
-    Serial2.printf("Read MZT to RAM[size:%X][offs:%X][addr:%X]\n",size,offs,addr);
+    Serial1.printf("Read MZT to RAM[size:%X][offs:%X][addr:%X]\n",size,offs,addr);
     fd.read(mem + offs + RAM_START, size) ;
     fd.close();
 
@@ -1089,11 +1165,11 @@ int setMztToMemory(String mztFile) {
     Z80_Reset();
   */
   File fd = SD.open(filePath, FILE_READ);
-  Serial2.println("fileOpen");
+  Serial1.println("fileOpen");
   if (fd == NULL)
   {
-    Serial2.print("can't open:");
-    Serial2.println(filePath);
+    Serial1.print("can't open:");
+    Serial1.println(filePath);
     delay(100);
     fd.close();
     return false;
@@ -1120,7 +1196,7 @@ int setMztToMemory(String mztFile) {
       int offs = header[0x14] | (header[0x15] << 8);
       int addr = header[0x16] | (header[0x17] << 8);
       
-      Serial2.printf("MZ20[size:%X][offs:%X][addr:%X]\n", size, offs, addr);
+      Serial1.printf("MZ20[size:%X][offs:%X][addr:%X]\n", size, offs, addr);
 
       if (remain >= size + 2) {
         fd.read(mem + offs + RAM_START, size);
@@ -1161,7 +1237,7 @@ int setMztToMemory(String mztFile) {
       m5lcd.print("\n[SET TO MEMORY]");
       delay(500);
       
-      Serial2.printf("[size:%X][offs:%X][addr:%X]\n", size, offs, addr);
+      Serial1.printf("[size:%X][offs:%X][addr:%X]\n", size, offs, addr);
 
       if (remain >= size) {
 //         if(mode == 2){ //BASICの場合、1バイトずつ処理。SP-5030用 / mode=5 S-BASIC？ワークエリア違ってるから読めないです…。
@@ -1178,7 +1254,7 @@ int setMztToMemory(String mztFile) {
 //               break;
 //             }
 //             nextAddress = address + deltaAddress;
-//             Serial2.printf("%x:%x:%x\n" ,address,deltaAddress,nextAddress);
+//             Serial1.printf("%x:%x:%x\n" ,address,deltaAddress,nextAddress);
 //             *(mem + RAM_START + address)= ((uint8_t*)&(nextAddress))[0];
 //             *(mem +  RAM_START + address + 1)= ((uint8_t*)&(nextAddress))[1];
 //             fd.read(mem + RAM_START + address + 2, deltaAddress - 2); 
@@ -1201,7 +1277,7 @@ int setMztToMemory(String mztFile) {
 //             for(int workAddress = 0x4634;workAddress<0x4645;workAddress=workAddress + 2){
 //               *(mem + RAM_START + workAddress)= ((uint8_t*)&(address))[0];
 //               *(mem + RAM_START + workAddress + 1)= ((uint8_t*)&(address))[1];
-//   //           Serial2.printf("WORK:%x:%x\n" ,workAddress,address);
+//   //           Serial1.printf("WORK:%x:%x\n" ,workAddress,address);
 //               address = address + 2;
 //           }
 //           //これは必要ないかも？
@@ -1210,11 +1286,11 @@ int setMztToMemory(String mztFile) {
 
 // /* TEST
 //           for(int testAddress = 0x4634;testAddress < 0x4660;testAddress=testAddress+16){
-//             Serial2.printf("%08x  " ,testAddress);
+//             Serial1.printf("%08x  " ,testAddress);
 //             for(int j=0;j<16;j++){
-//               Serial2.printf("%02x " ,*(mem + RAM_START + testAddress + j));
+//               Serial1.printf("%02x " ,*(mem + RAM_START + testAddress + j));
 //             }
-//             Serial2.println();
+//             Serial1.println();
 //           }
 // */
 
@@ -1233,7 +1309,7 @@ int setMztToMemory(String mztFile) {
       }
       // if(mode == 5){ //S-BASICワークエリア
       //   WORD address = offs + size;
-      //   Serial2.printf("address :%x " ,address);
+      //   Serial1.printf("address :%x " ,address);
       //   //WORD workAreaAddress = 0x6B09;
       //   WORD workAreaAddress =0x6B49; //状況によって場所が異なるかも？
       //   *(mem + RAM_START + workAreaAddress)= ((uint8_t*)&(address))[0];
@@ -1247,11 +1323,11 @@ int setMztToMemory(String mztFile) {
       //   //workAreaAddress = 0x6B57;
       //   //*(mem + RAM_START + workAreaAddress + 14)= 0xB4;
       //   for(int testAddress = 0x6B09;testAddress < 0x6B60;testAddress=testAddress+16){
-      //       Serial2.printf("%08x  " ,testAddress);
+      //       Serial1.printf("%08x  " ,testAddress);
       //       for(int j=0;j<16;j++){
-      //         Serial2.printf("%02x " ,*(mem + RAM_START + testAddress + j));
+      //         Serial1.printf("%02x " ,*(mem + RAM_START + testAddress + j));
       //       }
-      //       Serial2.println();
+      //       Serial1.println();
       //   }
       // }
     }
@@ -1444,13 +1520,13 @@ void sortList(String fileList[], int fileListCount) {
 
 void gui_msg(const char* msg)         // temporarily display a msg
 {
-    Serial2.println(msg);
+    Serial1.println(msg);
     //if(btKeyboardConnect == false){
     //  updateStatusArea(msg);
     //}
 }
 void sys_msg(const char* msg) {
-    Serial2.println(msg);
+    Serial1.println(msg);
     //if(btKeyboardConnect == false){
     updateStatusArea(msg);
     //}

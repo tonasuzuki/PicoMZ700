@@ -94,9 +94,13 @@ enum MSGQID
 
 #define ROM_DIRECTORY "/MZROM"
 #define TAPE_DIRECTORY "/MZROM/MZTAPE"
-#define DEFAULT_ROM_FILE  "1Z009.ROM"
 
-#define DEFAULT_TAPE_FILE  "WonderHouse.mzt"
+//#define DEFAULT_ROM_FILE  "1Z009.ROM"
+#define DEFAULT_ROM_FILE  "NEWMON7.ROM"
+
+//#define DEFAULT_TAPE_FILE  "WonderHouse.mzt"
+#define DEFAULT_TAPE_FILE  "PETIT-T.MZT"
+
 #define DEFAULT_FONT_FILE  "MZ700FON.JP"
 
 // use first channel of 16 channels (started from zero)
@@ -106,6 +110,19 @@ enum MSGQID
 // use 5000 Hz as a LEDC base frequency
 #define LEDC_BASE_FREQ     5000
 
-#define BUZZER_PIN 26
+//#define BUZZER_PIN 26
+#define BUZZER_PIN 28
+
+//MachikaniaP onboard button(2025/09/21)
+#define GPIO_BUTTON_UP      8
+#define GPIO_BUTTON_LEFT    9
+#define GPIO_BUTTON_RIGHT   20
+#define GPIO_BUTTON_DOWN    21
+#define GPIO_BUTTON_START   22
+#define GPIO_BUTTON_FIRE    26
+#define GPIO_BUTTON_SELECT  2
+
+
+
 
 #endif
